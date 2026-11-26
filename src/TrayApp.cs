@@ -9,7 +9,7 @@ using Microsoft.Win32;
 [assembly: AssemblyTitle("鼠标电量")]
 [assembly: AssemblyDescription("Windows 托盘蓝牙与罗技无线鼠标电量工具")]
 [assembly: AssemblyProduct("Logi Mouse Battery")]
-[assembly: AssemblyVersion("2.0.0.0")]
+[assembly: AssemblyVersion("2.0.1.0")]
 
 namespace GpwBattery
 {
@@ -164,7 +164,7 @@ namespace GpwBattery
 
         private void AddMouseChoice(string caption, string key, string name)
         {
-            var item = new ToolStripMenuItem(caption) { Checked = (preferred ?? "") == (key ?? "") };
+            var item = new ToolStripMenuItem(caption) { Checked = String.Equals(preferred ?? "", key ?? "", StringComparison.OrdinalIgnoreCase) };
             item.Click += delegate
             {
                 preferred = key;

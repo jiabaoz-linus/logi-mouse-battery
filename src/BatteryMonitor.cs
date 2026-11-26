@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace GpwBattery
 {
-    internal enum PowerState { Unavailable, Battery, Charging, Full, ChargeError, Inactive }
+    internal enum PowerState { Unavailable, Battery, Charging, Full, ChargeError, Inactive, ConnectedNoLevel, ConnectionUnknown }
     internal enum BatteryBand { Unknown, Critical, Low, Good, High }
 
     internal sealed class Reading
@@ -36,7 +36,18 @@ namespace GpwBattery
         public bool HasLevel { get { return Percent.HasValue || Band != BatteryBand.Unknown || Millivolts.HasValue; } }
         public int Priority
         {
-            get { return Percent.HasValue ? 0 : HasLevel ? 1 : Power == PowerState.Inactive ? 3 : 2; }
+            get
+            {
+                if (Percent.HasValue) return 0;
+                if (HasLevel) return 1;
+                switch (Power)
+                {
+                    case PowerState.ConnectedNoLevel: return 2;
+                    case PowerState.Inactive: return 4;
+                    case PowerState.ConnectionUnknown: return 5;
+                    default: return 3;
+                }
+            }
         }
 
         public string Source
@@ -87,7 +98,8 @@ namespace GpwBattery
         public Reading Select(string preferred, string lastName)
         {
             if (!String.IsNullOrEmpty(preferred))
-                return Devices.FirstOrDefault(r => r.Key == preferred) ?? Reading.MouseInactive(lastName ?? Reading.AppName, preferred);
+                return Devices.FirstOrDefault(r => String.Equals(r.Key, preferred, StringComparison.OrdinalIgnoreCase))
+                    ?? Reading.Unavailable("暂未找到所选鼠标", String.IsNullOrWhiteSpace(lastName) ? Reading.AppName : lastName, preferred);
             return Devices.FirstOrDefault() ?? fallback;
         }
     }
