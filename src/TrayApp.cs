@@ -9,7 +9,7 @@ using Microsoft.Win32;
 [assembly: AssemblyTitle("鼠标电量")]
 [assembly: AssemblyDescription("Windows 托盘蓝牙与罗技无线鼠标电量工具")]
 [assembly: AssemblyProduct("Logi Mouse Battery")]
-[assembly: AssemblyVersion("2.0.1.0")]
+[assembly: AssemblyVersion("2.0.2.0")]
 
 namespace GpwBattery
 {
@@ -78,7 +78,6 @@ namespace GpwBattery
         private static readonly Reading PreviewReading = new Reading("样式预览", 70, PowerState.Battery, "");
         private readonly ToolStripMenuItem startup = new ToolStripMenuItem("随 Windows 登录启动");
         private readonly ShellTrayIcon tray;
-        private readonly TrayArtworkWindow artworkWindow = new TrayArtworkWindow();
         private readonly System.Windows.Forms.Timer placement = new System.Windows.Forms.Timer { Interval = 350 };
         private readonly Thread reader;
         private TrayArtwork artwork;
@@ -116,7 +115,7 @@ namespace GpwBattery
             menu.Opening += delegate { startup.Checked = StartsAtLogin(); RefreshMouseMenu(); };
             startup.Click += delegate { ToggleStartup(); };
             tray = new ShellTrayIcon(menu);
-            placement.Tick += delegate { UpdatePlacement(); };
+            placement.Tick += delegate { tray.Update(artwork, tooltip); };
             dispatcher.BeginInvoke((Action)delegate { Apply(currentReading); });
             reader = new Thread(delegate() { BatteryMonitor.Run(PostReading, stopping.Token, false); });
             reader.Name = "Mouse battery monitor";
@@ -230,19 +229,9 @@ namespace GpwBattery
             status.Text = value.StatusText;
             string fullTip = value.Name + Environment.NewLine + value.StatusText;
             tooltip = fullTip.Substring(0, Math.Min(fullTip.Length, 127));
-            placement.Enabled = artwork.Border != null;
-            UpdatePlacement();
+            placement.Enabled = artwork.Enlarged != null;
+            tray.Update(artwork, tooltip);
             if (previous != null && previous != artwork) previous.Dispose();
-        }
-
-        private void UpdatePlacement()
-        {
-            Rectangle cell;
-            IntPtr taskbar;
-            bool enlarged = artwork.Border != null && tray.TryGetVisibleTaskbarCell(out cell, out taskbar) &&
-                            artworkWindow.TryShow(artwork.Border, cell, taskbar);
-            if (!enlarged) artworkWindow.Hide();
-            tray.Update(enlarged ? artwork.Center : artwork.Native, tooltip);
         }
 
         private IconStyle CurrentStyle()
@@ -324,7 +313,6 @@ namespace GpwBattery
             {
                 stopping.Cancel();
                 placement.Dispose();
-                artworkWindow.Dispose();
                 tray.Dispose();
                 if (artwork != null) artwork.Dispose();
                 foreach (ToolStripMenuItem item in styles.DropDownItems)

@@ -24,6 +24,7 @@ namespace GpwBattery
             TestHid();
             TestSelection();
             TestMenu();
+            TestTrayArtwork();
             Console.WriteLine("Passed " + checks + " checks.");
             return 0;
         }
@@ -229,6 +230,48 @@ namespace GpwBattery
                 styles++;
             }
             Check(styles == 8, "eight styles");
+        }
+
+        private static void TestTrayArtwork()
+        {
+            var reading = new Reading("mouse", 54, PowerState.Battery, "");
+            var theme = new TrayTheme(Color.FromArgb(34, 35, 39), Color.White, false, false);
+            // Windows may place its own icon one physical pixel off the tray button center.
+            // Both the enlarged face and the native fallback must stand alone.
+            foreach (int size in new[] { 16, 20, 24, 28, 32 })
+            {
+                int fullSize = size + 2 * (int)Math.Round(size * 0.14);
+                using (var artwork = new TrayArtwork(reading, IconStyle.Material, theme, size))
+                using (var expected = BatteryIcon.RenderFace(reading, IconStyle.Material, theme, fullSize))
+                using (var native = BatteryIcon.Create(reading, IconStyle.Material, theme, size))
+                using (var expectedNative = native.ToBitmap())
+                using (var actualNative = artwork.Native.ToBitmap())
+                {
+                    Check(SamePixels(artwork.Enlarged, expected), "complete enlarged 54% ring at " + size);
+                    Check(SamePixels(actualNative, expectedNative), "complete native fallback at " + size);
+                }
+            }
+
+            using (var placeholder = BatteryIcon.CreateTransparent())
+            using (var surface = new Bitmap(36, 36))
+            using (var g = Graphics.FromImage(surface))
+            {
+                foreach (var background in new[] { Color.White, Color.FromArgb(34, 35, 39) })
+                {
+                    g.Clear(background);
+                    g.DrawIcon(placeholder, new Rectangle(5, 4, 28, 28));
+                    Check(Enumerable.Range(0, 36 * 36).All(i =>
+                        surface.GetPixel(i % 36, i / 36).ToArgb() == background.ToArgb()),
+                        "offset shell icon leaves every pixel of the enlarged surface untouched");
+                }
+            }
+        }
+
+        private static bool SamePixels(Bitmap actual, Bitmap expected)
+        {
+            return actual.Size == expected.Size && Enumerable.Range(0, actual.Width * actual.Height)
+                .All(i => actual.GetPixel(i % actual.Width, i / actual.Width).ToArgb() ==
+                          expected.GetPixel(i % actual.Width, i / actual.Width).ToArgb());
         }
     }
 }

@@ -5,7 +5,7 @@ using System.Windows.Forms;
 
 namespace GpwBattery
 {
-    // Explorer displays the center and handles input. This window adds only the surrounding pixels.
+    // The whole enlarged face shares one pixel grid. Explorer's tray button still handles input.
     internal sealed class TrayArtworkWindow : NativeWindow, IDisposable
     {
         private const int Popup = unchecked((int)0x80000000), Disabled = 0x08000000;

@@ -19,9 +19,11 @@ namespace GpwBattery
 
         private readonly ContextMenuStrip menu;
         private readonly Timer retry = new Timer { Interval = 1500 };
-        private Icon icon;
+        private readonly TrayArtworkWindow artworkWindow = new TrayArtworkWindow();
+        private readonly Icon transparentIcon = BatteryIcon.CreateTransparent();
+        private Icon nativeIcon;
         private string tip;
-        private bool registered, version4, disposed;
+        private bool registered, version4, usingArtwork, disposed;
 
         public ShellTrayIcon(ContextMenuStrip menu)
         {
@@ -31,12 +33,18 @@ namespace GpwBattery
             menu.Closed += MenuClosed;
         }
 
-        public void Update(Icon nextIcon, string nextTip)
+        public void Update(TrayArtwork artwork, string nextTip)
         {
-            if (registered && ReferenceEquals(icon, nextIcon) && tip == nextTip) return;
-            icon = nextIcon;
+            Rectangle cell;
+            IntPtr taskbar;
+            bool enlarged = artwork.Enlarged != null && TryGetVisibleTaskbarCell(out cell, out taskbar) &&
+                            artworkWindow.TryShow(artwork.Enlarged, cell, taskbar);
+            bool update = !registered || enlarged != usingArtwork || tip != nextTip ||
+                          (!enlarged && !ReferenceEquals(nativeIcon, artwork.Native));
+            nativeIcon = artwork.Native;
             tip = nextTip;
-            RegisterOrUpdate();
+            if (update) RegisterOrUpdate(enlarged);
+            if (!usingArtwork) artworkWindow.Hide();
         }
 
         private NotifyData Identity()
@@ -45,19 +53,30 @@ namespace GpwBattery
                                     Window = Handle, Id = 1, Flags = GuidFlag, Guid = IconGuid };
         }
 
-        private void RegisterOrUpdate()
+        private void RegisterOrUpdate(bool enlarged = false)
         {
-            if (disposed || icon == null) return;
+            if (disposed || nativeIcon == null) return;
             var data = Identity();
             data.Flags |= MessageFlag | IconFlag | TipFlag | ShowTip;
             data.CallbackMessage = Callback;
-            data.Icon = icon.Handle;
             data.Tip = tip;
-            if (registered && Shell_NotifyIcon(Modify, ref data)) return;
+            if (registered)
+            {
+                // Only clear Explorer's copy once the entire enlarged face is on screen.
+                data.Icon = (enlarged ? transparentIcon : nativeIcon).Handle;
+                if (Shell_NotifyIcon(Modify, ref data))
+                {
+                    usingArtwork = enlarged;
+                    return;
+                }
+            }
 
             // A restarted shell may have lost the icon. A delayed broadcast
             // can also arrive after the shell has already accepted it again.
+            data.Icon = nativeIcon.Handle;
             registered = Shell_NotifyIcon(Add, ref data) || Shell_NotifyIcon(Modify, ref data);
+            usingArtwork = false;
+            artworkWindow.Hide();
             if (registered)
             {
                 var version = Identity();
@@ -123,6 +142,8 @@ namespace GpwBattery
                 var data = Identity();
                 Shell_NotifyIcon(Delete, ref data);
             }
+            artworkWindow.Dispose();
+            transparentIcon.Dispose();
             RemoveProp(Handle, RegistrationProperty);
             DestroyHandle();
         }
@@ -133,7 +154,7 @@ namespace GpwBattery
             return Shell_NotifyIconGetRect(ref id, out bounds);
         }
 
-        public bool TryGetVisibleTaskbarCell(out Rectangle cell, out IntPtr taskbar)
+        private bool TryGetVisibleTaskbarCell(out Rectangle cell, out IntPtr taskbar)
         {
             cell = Rectangle.Empty;
             taskbar = IntPtr.Zero;

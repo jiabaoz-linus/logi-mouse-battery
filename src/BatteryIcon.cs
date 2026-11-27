@@ -13,8 +13,8 @@ namespace GpwBattery
 
     internal sealed class TrayArtwork : IDisposable
     {
-        public readonly Icon Native, Center;
-        public readonly Bitmap Border;
+        public readonly Icon Native;
+        public readonly Bitmap Enlarged;
 
         public TrayArtwork(Reading reading, IconStyle style, TrayTheme theme, int size)
         {
@@ -22,25 +22,15 @@ namespace GpwBattery
             {
                 Native = BatteryIcon.Create(reading, style, theme, size);
                 if (style == IconStyle.Apple && reading.Power != PowerState.Inactive) return;
-                // Equal integer margins align the shell's pixels with the artwork at every DPI.
                 int margin = Math.Max(1, (int)Math.Round(size * 0.14));
-                Border = BatteryIcon.RenderFace(reading, style, theme, size + 2 * margin);
-                var middle = new Rectangle(margin, margin, size, size);
-                using (var crop = Border.Clone(middle, PixelFormat.Format32bppPArgb))
-                    Center = BatteryIcon.ToIcon(crop);
-                using (var g = Graphics.FromImage(Border))
-                {
-                    g.CompositingMode = CompositingMode.SourceCopy;
-                    g.FillRectangle(Brushes.Transparent, middle);
-                }
+                Enlarged = BatteryIcon.RenderFace(reading, style, theme, size + 2 * margin);
             }
             catch { Dispose(); throw; }
         }
 
         public void Dispose()
         {
-            if (Border != null) Border.Dispose();
-            if (Center != null) Center.Dispose();
+            if (Enlarged != null) Enlarged.Dispose();
             if (Native != null) Native.Dispose();
         }
     }
@@ -143,7 +133,12 @@ namespace GpwBattery
             }
         }
 
-        internal static Icon ToIcon(Bitmap bitmap)
+        internal static Icon CreateTransparent()
+        {
+            using (var empty = new Bitmap(16, 16, PixelFormat.Format32bppArgb)) return ToIcon(empty);
+        }
+
+        private static Icon ToIcon(Bitmap bitmap)
         {
             IntPtr handle = bitmap.GetHicon();
             try
